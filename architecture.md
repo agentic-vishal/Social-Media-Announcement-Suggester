@@ -1,163 +1,279 @@
-# Mental Wellness Practice Suggester -- Architecture
+## Social Media Announcement Suggester -- Architecture
 
-## How It Works
+How It Works
 
-```
-User types how they feel
+User enters announcement
         |
         v
-  [understand_mood] -- acknowledges feeling, classifies severity
+   [user_announcement]
         |
-        +---> [suggest_breathing]   \
-        |                            |
-        +---> [suggest_mindfulness]  +--> run in PARALLEL
-        |                            |
-        +---> [suggest_movement]    /
-        |
-        v
-  [pick_best_practice] -- reads all 3, decides quick vs deep
-        |
-        +-- MILD/MODERATE --> [quick_practice] --> under 5 min routine
-        |
-        +-- HIGH ----------> [deep_practice]  --> 10-15 min session
+        +---> [write_formal_announcement]  \
+        |                                     |
+        +---> [create_social_hook]            +--> run in PARALLEL
+        |                                     |
+        +---> [suggest_hashtags]             /
         |
         v
-  Final output printed to user
-```
+ [decide_announcement_tone]
+        |
+        +-- PROFESSIONAL --> [linkedin_style_post]
+        |
+        +-- PLAYFUL ------> [instagram_style_post]
+        |
+        v
+    Final output
 
-## Interactive Mode
+Interactive Mode
 
-```
-$ python mental_wellness_graph.py
+$ python social_media_post.py
 
   =======================================================
-    MENTAL WELLNESS PRACTICE SUGGESTER
+    ANNOUNCEMENT SUGGESTER
   =======================================================
 
-    Tell me how you're feeling and I'll suggest a
-    personalized wellness practice just for you.
+    Tell me what announcement you want to post and I'll
+    create a personalized social media post.
     Type 'quit' to exit.
 
-    How are you feeling? > I feel anxious and can't focus
+    What announcement do you want to post? > I got promoted to Senior Manager
+
     ...graph runs...
-    YOUR PERSONALIZED PRACTICE
+
+    YOUR PERSONALIZED ANNOUNCEMENT
     ...
 
-    How are you feeling? > quit
-    Take care of yourself. Goodbye!
-```
+    What announcement do you want to post? > I'm getting married!
 
-## Graph Structure (Detailed)
+    ...graph runs...
 
-```
+    YOUR PERSONALIZED ANNOUNCEMENT
+    ...
+
+    What announcement do you want to post? > quit
+    Goodbye!
+
+Graph Structure
+
                     +-------+
                     | START |
                     +---+---+
                         |
+           +------------+------------+
+           |            |            |
+           v            v            v
++----------+----+ +-----+--------+ +--+-------------+
+| write_formal  | | create_social| | suggest_       |
+| announcement  | | hook         | | hashtags       |
++-------+-------+ +------+-------+ +------+----------+
+        |                |                |
+        +----------------+----------------+
+                         |
+                         v
+             +-----------+------------+
+             | decide_announcement_   |
+             | tone                   |
+             |                        |
+             | Professional / Playful |
+             +-----------+------------+
+                         |
+                 CONDITIONAL EDGE
+                    /         \
+                   /           \
+        Professional           Playful
+               |                   |
+               v                   v
+     +---------+---------+ +------+----------+
+     | linkedin_style_   | | instagram_      |
+     | post              | | style_post      |
+     +---------+---------+ +------+----------+
+               |                  |
+               +--------+---------+
+                        |
                         v
-            +-----------+-----------+
-            |   understand_mood     |
-            |                       |
-            | Acknowledges feeling  |
-            | Severity: MILD /      |
-            |   MODERATE / HIGH     |
-            +-----------+-----------+
-                        |
-           PARALLEL FAN-OUT (3 edges from one node)
-          /             |              \
-         v              v               v
-+--------+---+ +-------+------+ +------+--------+
-|  suggest   | |   suggest    | |   suggest     |
-|  breathing | | mindfulness  | |   movement    |
-|            | |              | |               |
-| e.g. 4-7-8| | e.g. 5-4-3  | | e.g. child's  |
-| breathing  | | -2-1 ground | | pose, neck    |
-|            | |              | | rolls         |
-+--------+---+ +-------+------+ +------+--------+
-         \              |               /
-          FAN-IN (all 3 must finish)
-                        |
-                        v
-          +-------------+-------------+
-          |     pick_best_practice    |
-          |                           |
-          | Reads all 3 suggestions   |
-          | Returns JSON:             |
-          | {needs_deep_session,      |
-          |  reason}                  |
-          +-------------+-------------+
-                        |
-               CONDITIONAL EDGE
-              route_after_decision()
-                   /         \
-      false       /           \      true
-    (MILD/MOD)   /             \   (HIGH)
-                v               v
-    +-----------+--+   +-------+---------+
-    | quick_       |   | deep_           |
-    | practice     |   | practice        |
-    |              |   |                 |
-    | Under 5 min  |   | 10-15 min       |
-    | Best single  |   | 3 phases:       |
-    | technique,   |   |  1. Settle      |
-    | numbered     |   |  2. Ground      |
-    | steps        |   |  3. Release     |
-    +-----------+--+   +-------+---------+
-                \               /
-                 \             /
-                  v           v
-                  +----+----+
-                  |   END   |
-                  +---------+
-```
+                       END
 
-## State Fields
+State Fields
 
-```
-WellnessState
+Announcement
 |
-|-- user_feeling              <-- set by user input
-|-- breathing_suggestion      <-- written by suggest_breathing
-|-- mindfulness_suggestion    <-- written by suggest_mindfulness
-|-- movement_suggestion       <-- written by suggest_movement
-|-- needs_deep_session        <-- written by pick_best_practice
-|-- practice_reason           <-- written by pick_best_practice
-|-- final_suggestion          <-- written by quick_practice OR deep_practice
-|-- messages                  <-- appended by ALL nodes (operator.add)
-```
+|-- user_announcement
+|       <-- set by user input
+|
+|-- formal_announcement_suggestion
+|       <-- written by write_formal_announcement
+|
+|-- social_hook_suggestion
+|       <-- written by create_social_hook
+|
+|-- hashtags_suggestion
+|       <-- written by suggest_hashtags
+|
+|-- needs_professional_announcement
+|       <-- written by decide_announcement_tone
+|
+|-- announcement_reason
+|       <-- written by decide_announcement_tone
+|
+|-- final_suggestion
+|       <-- written by linkedin_style_post
+|           OR instagram_style_post
+|
+|-- messages
+        <-- appended by all nodes (operator.add)
 
-## LangGraph Concepts Used
+LangGraph Concepts Used
 
-| Concept | Where in Code | What It Does |
-|---------|--------------|--------------|
-| State (Pydantic) | `WellnessState` class | Typed data that flows through every node |
-| Nodes | `understand_mood`, `suggest_*`, etc. | Functions that read state, do one job, return updates |
-| Parallel Execution | 3 edges from `understand_mood` | LangGraph runs all 3 suggest nodes simultaneously |
-| Fan-In | 3 edges into `pick_best_practice` | Waits for all parallel nodes to finish |
-| Conditional Edge | `route_after_decision()` | Routes to quick or deep based on `needs_deep_session` |
-| Graph Compilation | `graph.compile()` | Turns graph definition into runnable `app` |
-| Invocation | `app.invoke({...})` | Runs the graph with initial state |
-| Message Accumulation | `Annotated[list, operator.add]` | Parallel nodes append without overwriting |
+Concept
 
-## Tech Stack
+Where in Code
 
-| Component | Purpose |
-|-----------|---------|
-| LangGraph | Graph orchestration -- nodes, edges, parallel, conditional |
-| LangChain | OpenAI LLM wrapper (ChatOpenAI) |
-| OpenAI | gpt-4o-mini -- cheap, fast, good enough for demo |
-| Pydantic | State validation and type safety |
-| python-dotenv | Load OPENAI_API_KEY from .env |
+What It Does
 
-## File Structure
+State (Pydantic)
 
-```
-LangGraph_AgentFramework/
-|-- mental_wellness_graph.py    Main code (graph + interactive loop)
-|-- architecture.md             This file
-|-- architecture.drawio         Visual diagram (open with draw.io extension)
-|-- requirements.txt            4 dependencies
-|-- .env                        OPENAI_API_KEY (not committed)
-|-- .env.example                Template for .env
-|-- .gitignore                  Ignores .env, venv, __pycache__
-```
+Announcement class
+
+Typed shared data that flows through every node
+
+Nodes
+
+Specialist and final functions
+
+Each node performs one focused task
+
+Parallel Execution
+
+Three specialist branches
+
+Formal announcement, hooks, and hashtags run independently
+
+Fan-In
+
+Three edges into decide_announcement_tone
+
+Decision node receives specialist outputs
+
+Conditional Edge
+
+route_announcement()
+
+Routes to LinkedIn or Instagram
+
+Graph Compilation
+
+graph.compile()
+
+Converts graph definition into a runnable application
+
+Invocation
+
+app.invoke({...})
+
+Starts graph execution
+
+Message Accumulation
+
+Annotated[list, operator.add]
+
+Appends messages without overwriting existing messages
+
+Node Responsibilities
+
+Specialist Node 1 — write_formal_announcement
+
+Creates a concise professional version of the user's announcement.
+
+Specialist Node 2 — create_social_hook
+
+Creates engaging social-media hook options.
+
+Specialist Node 3 — suggest_hashtags
+
+Suggests relevant hashtags based on the announcement.
+
+Decision Node — decide_announcement_tone
+
+Determines whether the announcement is better suited for a professional or playful tone.
+
+Professional:
+- Work
+- Business
+- Career
+- Company announcements
+
+Playful:
+- Vacation
+- Marriage
+- Birthday
+- Celebration
+- Personal updates
+
+Final Node — linkedin_style_post
+
+Creates a professional, humble and concise LinkedIn-style announcement.
+
+Final Node — instagram_style_post
+
+Creates a casual, warm and playful Instagram-style announcement.
+
+Tech Stack
+
+Component
+
+Purpose
+
+LangGraph
+
+Graph orchestration, nodes, parallel execution and conditional routing
+
+LangChain
+
+LLM integration through ChatOpenAI
+
+OpenAI
+
+gpt-4o-mini for announcement generation and classification
+
+Pydantic
+
+State validation and type safety
+
+python-dotenv
+
+Loads OPENAI_API_KEY from .env
+
+File Structure
+
+Social-Media-Announcement-Suggester/
+|
+|-- social_media_post.py       Main application and LangGraph workflow
+|-- architecture.md            Architecture documentation
+|-- architecture.drawio        Visual graph diagram
+|-- README.md                  Project documentation
+|-- requirements.txt           Python dependencies
+|-- .env                       OPENAI_API_KEY (not committed)
+|-- .env.example               Environment variable template
+|-- .gitignore                 Git ignore configuration
+
+Execution Flow
+
+User Input
+    |
+    v
+Three Specialist Nodes
+    |
+    +--> Formal Announcement
+    +--> Social Hooks
+    +--> Hashtags
+    |
+    v
+Decision Node
+    |
+    +--> Professional --> LinkedIn Post
+    |
+    +--> Playful ------> Instagram Post
+    |
+    v
+Final Response
+
+This project demonstrates parallel node execution, shared state management, fan-in, conditional routing, and workflow orchestration using LangGraph.
